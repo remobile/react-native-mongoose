@@ -1,0 +1,263 @@
+/*
+* (The MIT License)
+* Copyright (c) 2015-2016 YunJiang.Fang <42550564@qq.com>
+* @providesModule Mongoose
+* @flow-weak
+*/
+'use strict';
+let React = require('react-native');
+let {
+    AsyncStorage
+} = React;
+
+class Modal {
+    constructor(collectionName, dbName, capped) {
+        this.collectionName = collectionName;
+        this.dbName = dbName;
+        this.capped = capped||{};
+        this.strict = true;
+    }
+    checkMatch(item, query, strict) {
+        let match = true;
+        let self = this;
+        query = this.parseQuery(query);
+        if (query) {
+            query.forEach((cond) => {
+                match = match && self.evaluate(item[cond.field], cond.operand, cond.value, strict);
+            });
+        }
+        return match;
+    }
+    parseQuery(query) {
+        let res = [];
+        if (!Array.isArray(query)) {
+            query = [query];
+        }
+        query.forEach((cond) => {
+            for (let key in cond) {
+                let item = cond[key];
+                if (typeof item === 'object') {
+                    let condition = Object.keys(item);
+                    res.push({
+                        field: key,
+                        operand: condition[0],
+                        value: item[condition]
+                    });
+                } else {
+                    res.push({
+                        field: key,
+                        operand: '$eq',
+                        value: item
+                    });
+                }
+            }
+        });
+        return res;
+    }
+    evaluate(val1, op, val2, strict) {
+        switch (op) {
+            case '$gt':
+                return val1 > val2;
+            case '$lt':
+                return val1 < val2;
+            case '$gte':
+                return val1 >= val2;
+            case '$lte':
+                return val1 <= val2;
+            case '$ne':
+                return strict ? val1!==val2 : val1!=val2;
+            case '$eq':
+                return strict ? val1===val2 : val1==val2;
+            case '$like':
+                return new RegExp(val2).test(val1);
+        }
+    }
+    async createDatabase() {
+        await AsyncStorage.setItem(this.dbName, JSON.stringify({}));
+        return this.getDatabase();
+    }
+    async getDatabase() {
+        return new Promise(async(resolve, reject) => {
+            let database = await AsyncStorage.getItem(this.dbName);
+            if (database) {
+                resolve(Object.assign({}, JSON.parse(database)));
+            } else {
+                resolve(this.createDatabase());
+            }
+        });
+    }
+    async initCollection() {
+        this.database = await this.getDatabase();
+        var capped = this.capped;
+        this.collection = this.database[this.collectionName] ? this.database[this.collectionName] : {
+            'totalrows': 0,
+            'autoinc': 0,
+            'maxrows': capped.max||Number.MAX_VALUE,
+            'unique': capped.unique&&(Array.isArray(capped.unique)?capped.unique:[capped.unique]),
+            'rows': {}
+        };
+        this.database[this.collectionName] = this.database[this.collectionName] || this.collection;
+    }
+    async insert(data) {
+        await this.initCollection();
+        return new Promise(async(resolve, reject) => {
+            try {
+                let col = this.collection;
+                let rows = col["rows"];
+                let canInsert = true;
+
+                if (col.unique) {
+                    let query = {};
+                    col.unique.forEach((ii)=>{query[ii] = {$ne: data[ii]} });
+                    for (let _id in rows) {
+                        let row = rows[_id];
+                        if (!this.checkMatch(row, query, true)) {
+                            canInsert = false;
+                            reject({message: 'unique reject', query: query});
+                            break;
+                        }
+                    }
+                }
+                if (canInsert) {
+                    let autoinc = col.autoinc++;
+                    data._id = autoinc;
+                    if (col.totalrows >= col.maxrows) {
+                        let key = Object.keys(col.rows)[0];
+                        delete col.rows[key];
+                        col.totalrows--;
+                    }
+                    col.rows[autoinc] = data;
+                    col.totalrows++;
+
+
+                    this.database[this.collectionName] = col;
+                    await AsyncStorage.setItem(this.dbName, JSON.stringify(this.database));
+                    resolve(col.rows[data._id]);
+                }
+            } catch (error) {
+                console.error('Mongoose error: ' + error.message);
+            }
+        });
+    }
+    async update(data, query, params) {
+        params = params || {};
+        await this.initCollection();
+        return new Promise(async(resolve, reject) => {
+            let results = [];
+            let rows = this.collection["rows"];
+            let limit = params.limit||Number.MAX_VALUE;
+            let offset = params.offset||0;
+            let strict = params.strict || this.strict;
+            let cnt = 0;
+            try {
+                for (let row in rows) {
+                    let item = rows[row];
+                    if (this.checkMatch(item, query, strict)) {
+                        if (++cnt > offset) {
+                            rows[row] = Object.assign({}, item, data);
+                            results.push(item);
+                            if (--limit === 0) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                this.database[this.collectionName] = this.collection;
+                await AsyncStorage.setItem(this.dbName, JSON.stringify(this.database));
+                resolve(results);
+            } catch (error) {
+                console.error('Mongoose error: ' + error.message);
+            }
+        });
+    }
+    async upsert(data, query, params) {
+        params = params || {};
+        await this.initCollection();
+        return new Promise(async(resolve, reject) => {
+            try {
+                var docs = await this.update(data, query, params);
+                if (docs.length === 0) {
+                    docs = await this.insert(data, params);
+                }
+                resolve(docs);
+            } catch (error) {
+                console.error('Mongoose error: ' + error.message);
+            }
+        });
+    }
+    async remove(query, params) {
+        params = params || {};
+        await this.initCollection();
+        return new Promise(async(resolve, reject) => {
+            let results = [];
+            let rows = this.collection["rows"];
+            let limit = params.limit||Number.MAX_VALUE;
+            let offset = params.offset||0;
+            let strict = params.strict || this.strict;
+            let cnt = 0;
+
+            try {
+                for (let row in rows) {
+                    let item = rows[row];
+                    if (this.checkMatch(item, query, strict)) {
+                        if (++cnt > offset) {
+                            results.push(item);
+                            delete rows[row];
+                            this.collection["totalrows"]--;
+                            if (--limit === 0) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                this.database[this.collectionName] = this.collection;
+                await AsyncStorage.setItem(this.dbName, JSON.stringify(this.database));
+                resolve(results);
+            } catch (error) {
+                console.error('Mongoose error: ' + error.message);
+            }
+        });
+    }
+    async find(query, params) {
+        params = params || {};
+        await this.initCollection();
+        return new Promise((resolve, reject) => {
+            let results = [];
+            let rows = this.collection["rows"];
+            let limit = params.limit||Number.MAX_VALUE;
+            let offset = params.offset||0;
+            let strict = params.strict || this.strict;
+            let cnt = 0;
+            for (let row in rows) {
+                let item = rows[row];
+                if (this.checkMatch(item, query, strict)) {
+                    if (++cnt > offset) {
+                        results.push(item);
+                        if (--limit === 0) {
+                            break;
+                        }
+                    }
+                }
+            }
+            resolve(results);
+        });
+    }
+    async findOne(query, params) {
+        params = params || {};
+        params.limit = 1;
+        let docs = await this.find(query, params);
+        return docs?docs[0]:null;
+    }
+
+}
+
+class Mongoose {
+    constructor(dbName) {
+        this.dbName = dbName;
+    }
+    collection(collectionName, capped) {
+        return new Modal(collectionName, this.dbName, capped);
+    }
+}
+
+module.exports = Mongoose;
