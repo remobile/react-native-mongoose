@@ -10,12 +10,13 @@ let {
     AsyncStorage
 } = React;
 
-class Modal {
-    constructor(collectionName, dbName, capped) {
+class Collection {
+    constructor(collectionName, dbName, capped, memory) {
         this.collectionName = collectionName;
         this.dbName = dbName;
         this.capped = capped||{};
         this.strict = true;
+        this.memory = memory;
     }
     checkMatch(item, query, strict) {
         let match = true;
@@ -67,7 +68,7 @@ class Modal {
             case '$ne':
                 return strict ? val1!==val2 : val1!=val2;
             case '$eq':
-                return strict ? val1===val2 : val1==val2;
+                return (typeof val2==='function')? val2(val1): (strict ? val1===val2 : val1==val2);
             case '$like':
                 return new RegExp(val2).test(val1);
         }
@@ -87,16 +88,19 @@ class Modal {
         });
     }
     async initCollection() {
-        this.database = await this.getDatabase();
+    	if (!this.memory.database) {
+        	this.memory.database = await this.getDatabase();
+        }
+        var datebase = this.memory.database;
         var capped = this.capped;
-        this.collection = this.database[this.collectionName] ? this.database[this.collectionName] : {
+        this.collection = database[this.collectionName] ? database[this.collectionName] : {
             'totalrows': 0,
             'autoinc': 0,
             'maxrows': capped.max||Number.MAX_VALUE,
             'unique': capped.unique&&(Array.isArray(capped.unique)?capped.unique:[capped.unique]),
             'rows': {}
         };
-        this.database[this.collectionName] = this.database[this.collectionName] || this.collection;
+        database[this.collectionName] = database[this.collectionName] || this.collection;
     }
     async insert(data) {
         await this.initCollection();
@@ -129,10 +133,10 @@ class Modal {
                     col.rows[autoinc] = data;
                     col.totalrows++;
 
-
-                    this.database[this.collectionName] = col;
-                    await AsyncStorage.setItem(this.dbName, JSON.stringify(this.database));
-                    resolve(col.rows[data._id]);
+                    let database = this.memory.database;
+                    database[this.collectionName] = col;
+                    await AsyncStorage.setItem(this.dbName, JSON.stringify(database));
+                    resolve(data);
                 }
             } catch (error) {
                 console.error('Mongoose error: ' + error.message);
@@ -162,8 +166,10 @@ class Modal {
                         }
                     }
                 }
-                this.database[this.collectionName] = this.collection;
-                await AsyncStorage.setItem(this.dbName, JSON.stringify(this.database));
+
+                let database = this.memory.database;
+                database[this.collectionName] = this.collection;
+                await AsyncStorage.setItem(this.dbName, JSON.stringify(database));
                 resolve(results);
             } catch (error) {
                 console.error('Mongoose error: ' + error.message);
@@ -177,7 +183,7 @@ class Modal {
             try {
                 var docs = await this.update(data, query, params);
                 if (docs.length === 0) {
-                    docs = await this.insert(data, params);
+                    await this.insert(data);
                 }
                 resolve(docs);
             } catch (error) {
@@ -210,8 +216,9 @@ class Modal {
                         }
                     }
                 }
-                this.database[this.collectionName] = this.collection;
-                await AsyncStorage.setItem(this.dbName, JSON.stringify(this.database));
+                let database = this.memory.database;
+                database[this.collectionName] = this.collection;
+                await AsyncStorage.setItem(this.dbName, JSON.stringify(database));
                 resolve(results);
             } catch (error) {
                 console.error('Mongoose error: ' + error.message);
@@ -254,9 +261,13 @@ class Modal {
 class Mongoose {
     constructor(dbName) {
         this.dbName = dbName;
+        this.memory = {database: false};
     }
     collection(collectionName, capped) {
-        return new Modal(collectionName, this.dbName, capped);
+        return new Collection(collectionName, this.dbName, capped, this.memory);
+    }
+    clear() {
+    	this.memory.database = false;
     }
 }
 

@@ -3,7 +3,7 @@ A AsyncStorage based mongoose like storage for react-native
 
 ## Installation
 ```sh
-npm install react-native-mongoose --save
+npm install @remobile/react-native-mongoose --save
 ```
 
 ## Usage
@@ -20,7 +20,7 @@ var {
 } = React;
 
 
-var Button = require('react-native-simple-button');
+var Button = require('@remobile/react-native-simple-button');
 var Mongoose = require('react-native-mongoose');
 
 const DB_NAME = "fang";
@@ -117,6 +117,12 @@ var db = new Mongoose(dbname);
 ```
     * dbname: the name of database, in AsyncStorage it is a item key
 
+* #### clear memory
+```js
+    db.clear();
+```
+    * react-native-mongoose use memory chache database, when not use it, use it clear memory;
+
 
 * #### creat collection
 ```js
@@ -126,7 +132,6 @@ var collection = this.db.collection(collectionName, capped);
     * capped: {max: Number, unique:String|Array}
         * max: max rows in collection, if not set, have no limit
         * unique: set unique primary key, it can be a single String or a array for keys
-
 
 * #### insert
 ```js
@@ -193,6 +198,7 @@ var doc = collection.findOne(query);
 
  ### Query help
 Query can be a object like {a:1, b:2}, or {a:{$eq:1}, b:{$eq:2}}
+also can be a function lick {a:function(a){return a>1}}
 operand like follows:
 * '$gt':
 ```js

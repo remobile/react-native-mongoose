@@ -1,5 +1,5 @@
 {
-    "name": "react-native-mongoose",
+    "name": "@remobile/react-native-mongoose",
         "version": "1.0.0",
         "description": "A AsyncStorage based mongoose like storage for react-native",
         "main": "index.js",
