@@ -1,14 +1,8 @@
-/*
-* (The MIT License)
-* Copyright (c) 2015-2016 YunJiang.Fang <42550564@qq.com>
-* @providesModule Mongoose
-* @flow-weak
-*/
 'use strict';
-let React = require('react-native');
+let ReactNative = require('react-native');
 let {
     AsyncStorage
-} = React;
+} = ReactNative;
 
 class Collection {
     constructor(collectionName, dbName, capped, memory) {

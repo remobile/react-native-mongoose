@@ -12,12 +12,18 @@ npm install @remobile/react-native-mongoose --save
 ```js
 'use strict';
 
-var React = require('react-native');
+var React = require('react');
+var ReactNative = require('react-native');
+var {
+    StyleSheet,
+    View,
+    Image
+} = ReactNative;
 var {
     StyleSheet,
     View,
     AsyncStorage,
-} = React;
+} = ReactNative;
 
 
 var Button = require('@remobile/react-native-simple-button');
