@@ -1,18 +1,18 @@
 'use strict';
 let ReactNative = require('react-native');
 let {
-    AsyncStorage
+    AsyncStorage,
 } = ReactNative;
 
 class Collection {
-    constructor(collectionName, dbName, capped, memory) {
+    constructor (collectionName, dbName, capped, memory) {
         this.collectionName = collectionName;
         this.dbName = dbName;
-        this.capped = capped||{};
+        this.capped = capped || {};
         this.strict = true;
         this.memory = memory;
     }
-    checkMatch(item, query, strict) {
+    checkMatch (item, query, strict) {
         let match = true;
         let self = this;
         query = this.parseQuery(query);
@@ -23,7 +23,7 @@ class Collection {
         }
         return match;
     }
-    parseQuery(query) {
+    parseQuery (query) {
         let res = [];
         if (!Array.isArray(query)) {
             query = [query];
@@ -36,20 +36,20 @@ class Collection {
                     res.push({
                         field: key,
                         operand: condition[0],
-                        value: item[condition]
+                        value: item[condition],
                     });
                 } else {
                     res.push({
                         field: key,
                         operand: '$eq',
-                        value: item
+                        value: item,
                     });
                 }
             }
         });
         return res;
     }
-    evaluate(val1, op, val2, strict) {
+    evaluate (val1, op, val2, strict) {
         switch (op) {
             case '$gt':
                 return val1 > val2;
@@ -60,18 +60,18 @@ class Collection {
             case '$lte':
                 return val1 <= val2;
             case '$ne':
-                return strict ? val1!==val2 : val1!=val2;
+                return strict ? val1 !== val2 : val1 != val2;
             case '$eq':
-                return (typeof val2==='function')? val2(val1): (strict ? val1===val2 : val1==val2);
+                return (typeof val2 === 'function') ? val2(val1) : (strict ? val1 === val2 : val1 == val2);
             case '$like':
                 return new RegExp(val2).test(val1);
         }
     }
-    async createDatabase() {
+    async createDatabase () {
         await AsyncStorage.setItem(this.dbName, JSON.stringify({}));
         return this.getDatabase();
     }
-    async getDatabase() {
+    async getDatabase () {
         return new Promise(async(resolve, reject) => {
             let database = await AsyncStorage.getItem(this.dbName);
             if (database) {
@@ -81,37 +81,37 @@ class Collection {
             }
         });
     }
-    async initCollection() {
-    	if (!this.memory.database) {
-        	this.memory.database = await this.getDatabase();
+    async initCollection () {
+        if (!this.memory.database) {
+            this.memory.database = await this.getDatabase();
         }
-        var datebase = this.memory.database;
-        var capped = this.capped;
+        const database = this.memory.database;
+        const capped = this.capped;
         this.collection = database[this.collectionName] ? database[this.collectionName] : {
             'totalrows': 0,
             'autoinc': 0,
-            'maxrows': capped.max||Number.MAX_VALUE,
-            'unique': capped.unique&&(Array.isArray(capped.unique)?capped.unique:[capped.unique]),
-            'rows': {}
+            'maxrows': capped.max || Number.MAX_VALUE,
+            'unique': capped.unique && (Array.isArray(capped.unique) ? capped.unique : [capped.unique]),
+            'rows': {},
         };
         database[this.collectionName] = database[this.collectionName] || this.collection;
     }
-    async insert(data) {
+    async insert (data) {
         await this.initCollection();
         return new Promise(async(resolve, reject) => {
             try {
                 let col = this.collection;
-                let rows = col["rows"];
+                let rows = col['rows'];
                 let canInsert = true;
 
                 if (col.unique) {
                     let query = {};
-                    col.unique.forEach((ii)=>{query[ii] = {$ne: data[ii]} });
+                    col.unique.forEach((ii) => { query[ii] = { $ne: data[ii] }; });
                     for (let _id in rows) {
                         let row = rows[_id];
                         if (!this.checkMatch(row, query, true)) {
                             canInsert = false;
-                            reject({message: 'unique reject', query: query});
+                            reject({ message: 'unique reject', query: query });
                             break;
                         }
                     }
@@ -137,14 +137,14 @@ class Collection {
             }
         });
     }
-    async update(data, query, params) {
+    async update (data, query, params) {
         params = params || {};
         await this.initCollection();
         return new Promise(async(resolve, reject) => {
             let results = [];
-            let rows = this.collection["rows"];
-            let limit = params.limit||Number.MAX_VALUE;
-            let offset = params.offset||0;
+            let rows = this.collection['rows'];
+            let limit = params.limit || Number.MAX_VALUE;
+            let offset = params.offset || 0;
             let strict = params.strict || this.strict;
             let cnt = 0;
             try {
@@ -170,12 +170,12 @@ class Collection {
             }
         });
     }
-    async upsert(data, query, params) {
+    async upsert (data, query, params) {
         params = params || {};
         await this.initCollection();
         return new Promise(async(resolve, reject) => {
             try {
-                var docs = await this.update(data, query, params);
+                const docs = await this.update(data, query, params);
                 if (docs.length === 0) {
                     await this.insert(data);
                 }
@@ -185,14 +185,14 @@ class Collection {
             }
         });
     }
-    async remove(query, params) {
+    async remove (query, params) {
         params = params || {};
         await this.initCollection();
         return new Promise(async(resolve, reject) => {
             let results = [];
-            let rows = this.collection["rows"];
-            let limit = params.limit||Number.MAX_VALUE;
-            let offset = params.offset||0;
+            let rows = this.collection['rows'];
+            let limit = params.limit || Number.MAX_VALUE;
+            let offset = params.offset || 0;
             let strict = params.strict || this.strict;
             let cnt = 0;
 
@@ -203,7 +203,7 @@ class Collection {
                         if (++cnt > offset) {
                             results.push(item);
                             delete rows[row];
-                            this.collection["totalrows"]--;
+                            this.collection['totalrows']--;
                             if (--limit === 0) {
                                 break;
                             }
@@ -219,14 +219,14 @@ class Collection {
             }
         });
     }
-    async find(query, params) {
+    async find (query, params) {
         params = params || {};
         await this.initCollection();
         return new Promise((resolve, reject) => {
             let results = [];
-            let rows = this.collection["rows"];
-            let limit = params.limit||Number.MAX_VALUE;
-            let offset = params.offset||0;
+            let rows = this.collection['rows'];
+            let limit = params.limit || Number.MAX_VALUE;
+            let offset = params.offset || 0;
             let strict = params.strict || this.strict;
             let cnt = 0;
             for (let row in rows) {
@@ -243,25 +243,25 @@ class Collection {
             resolve(results);
         });
     }
-    async findOne(query, params) {
+    async findOne (query, params) {
         params = params || {};
         params.limit = 1;
         let docs = await this.find(query, params);
-        return docs?docs[0]:null;
+        return docs ? docs[0] : null;
     }
 
 }
 
 class Mongoose {
-    constructor(dbName) {
+    constructor (dbName) {
         this.dbName = dbName;
-        this.memory = {database: false};
+        this.memory = { database: false };
     }
-    collection(collectionName, capped) {
+    collection (collectionName, capped) {
         return new Collection(collectionName, this.dbName, capped, this.memory);
     }
-    clear() {
-    	this.memory.database = false;
+    clear () {
+        this.memory.database = false;
     }
 }
 
