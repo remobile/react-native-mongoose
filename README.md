@@ -1,5 +1,5 @@
 # React Native mongoose (remobile)
-A AsyncStorage based mongoose like storage for react-native
+An AsyncStorage based mongoose like storage for react-native
 
 ## Installation
 ```sh
